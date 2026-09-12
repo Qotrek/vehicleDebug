@@ -1,8 +1,9 @@
 Debugger = {
-	speedBuffer = {},
 	speed = 0.0,
-	accel = 0.0,
-	decel = 0.0,
+	bestAccelTime = 0.0,
+	bestDecelTime = 0.0,
+	accelTimerStart = nil,
+	decelTimerStart = nil,
 	toggle = false,
 	toggleOn = Config.EnabledByDefault
 }
@@ -81,56 +82,63 @@ end
 function Debugger:UpdateAverages()
 	if not DoesEntityExist(self.vehicle or 0) then return end
 
-	-- Get the speed.
 	local speed = GetEntitySpeed(self.vehicle)
+	local speedKmh = speed * 3.6
 
-	-- Speed buffer.
-	table.insert(self.speedBuffer, speed)
-
-	if #self.speedBuffer > 100 then
-		table.remove(self.speedBuffer, 1)
+	-- 0-100 km/h logic
+	if speedKmh > 1.0 and speedKmh < 100.0 then
+		if not self.accelTimerStart then
+			self.accelTimerStart = GetGameTimer()
+		end
+	elseif speedKmh >= 100.0 then
+		if self.accelTimerStart then
+			local time = (GetGameTimer() - self.accelTimerStart) / 1000.0
+			if self.bestAccelTime == 0.0 or time < self.bestAccelTime then
+				self.bestAccelTime = time
+			end
+			self.accelTimerStart = nil
+		end
+	else
+		self.accelTimerStart = nil
 	end
 
-	-- Calculate averages.
-	local accel = 0.0
-	local decel = 0.0
-	local accelCount = 0
-	local decelCount = 0
-
-	for k, v in ipairs(self.speedBuffer) do
-		if k > 1 then
-			local change = (v - self.speedBuffer[k - 1])
-			if change > 0.0 then
-				accel = accel + change
-				accelCount = accelCount + 1
-			else
-				decel = accel + change
-				decelCount = decelCount + 1
+	-- Deceleration logic (Braking to 0)
+	-- control 72 is Brake / Reverse
+	if IsControlPressed(0, 72) and speedKmh > 1.0 then
+		if not self.decelTimerStart then
+			self.decelTimerStart = GetGameTimer()
+		end
+	elseif speedKmh <= 1.0 then
+		if self.decelTimerStart then
+			local time = (GetGameTimer() - self.decelTimerStart) / 1000.0
+			if self.bestDecelTime == 0.0 or time < self.bestDecelTime then
+				self.bestDecelTime = time
 			end
+			self.decelTimerStart = nil
+		end
+	else
+		if not IsControlPressed(0, 72) then
+			self.decelTimerStart = nil
 		end
 	end
 
-	accel = accel / accelCount
-	decel = decel / decelCount
-
 	-- Set tops.
 	self.speed = math.max(self.speed, speed)
-	self.accel = math.max(self.accel, accel)
-	self.decel = math.min(self.decel, decel)
 
 	-- Update text.
 	self:Invoke("updateText", {
-		["top-speed"] = self.speed * 2.236936,
-		["top-accel"] = self.accel * 60.0 * 2.236936,
-		["top-decel"] = math.abs(self.decel) * 60.0 * 2.236936,
+		["top-speed"] = string.format("%.2f", self.speed * 3.6),
+		["top-accel"] = self.bestAccelTime > 0.0 and string.format("%.2f s", self.bestAccelTime) or "N/A",
+		["top-decel"] = self.bestDecelTime > 0.0 and string.format("%.2f s", self.bestDecelTime) or "N/A",
 	})
 end
 
 function Debugger:ResetStats()
 	self.speed = 0.0
-	self.accel = 0.0
-	self.decel = 0.0
-	self.speedBuffer = {}
+	self.bestAccelTime = 0.0
+	self.bestDecelTime = 0.0
+	self.accelTimerStart = nil
+	self.decelTimerStart = nil
 end
 
 function Debugger:SetHandling(key, value)
