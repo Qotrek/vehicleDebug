@@ -86,9 +86,21 @@ function Debugger:UpdateAverages()
 	local speedKmh = speed * 3.6
 
 	-- 0-100 km/h logic
-	if speedKmh > 1.0 and speedKmh < 100.0 then
+	if speedKmh < 1.0 then
+		-- Vehicle is stationary, reset timer until we actually start moving
+		self.accelTimerStart = nil
+	elseif speedKmh >= 1.0 and speedKmh < 100.0 then
 		if not self.accelTimerStart then
-			self.accelTimerStart = GetGameTimer()
+			-- Start timer only if speed is very low (e.g. just started moving from 0)
+			-- Otherwise they were just cruising and we shouldn't start 0-100
+			if speedKmh < 5.0 and IsControlPressed(0, 71) then
+				self.accelTimerStart = GetGameTimer()
+			end
+		else
+			-- We are measuring, cancel if they stop accelerating
+			if not IsControlPressed(0, 71) then
+				self.accelTimerStart = nil
+			end
 		end
 	elseif speedKmh >= 100.0 then
 		if self.accelTimerStart then
@@ -98,15 +110,17 @@ function Debugger:UpdateAverages()
 			end
 			self.accelTimerStart = nil
 		end
-	else
-		self.accelTimerStart = nil
 	end
 
 	-- Deceleration logic (Braking to 0)
-	-- control 72 is Brake / Reverse
-	if IsControlPressed(0, 72) and speedKmh > 1.0 then
-		if not self.decelTimerStart then
-			self.decelTimerStart = GetGameTimer()
+	if speedKmh > 1.0 then
+		if IsControlPressed(0, 72) then
+			if not self.decelTimerStart then
+				self.decelTimerStart = GetGameTimer()
+			end
+		else
+			-- Cancel if they stop braking
+			self.decelTimerStart = nil
 		end
 	elseif speedKmh <= 1.0 then
 		if self.decelTimerStart then
@@ -116,20 +130,29 @@ function Debugger:UpdateAverages()
 			end
 			self.decelTimerStart = nil
 		end
-	else
-		if not IsControlPressed(0, 72) then
-			self.decelTimerStart = nil
-		end
 	end
 
 	-- Set tops.
 	self.speed = math.max(self.speed, speed)
 
+	-- Format texts for UI
+	local accelText = self.bestAccelTime > 0.0 and string.format("%.2f s", self.bestAccelTime) or "N/A"
+	if self.accelTimerStart then
+		local currentAccelTime = (GetGameTimer() - self.accelTimerStart) / 1000.0
+		accelText = string.format("%.2f s (Pomiar...)", currentAccelTime)
+	end
+
+	local decelText = self.bestDecelTime > 0.0 and string.format("%.2f s", self.bestDecelTime) or "N/A"
+	if self.decelTimerStart then
+		local currentDecelTime = (GetGameTimer() - self.decelTimerStart) / 1000.0
+		decelText = string.format("%.2f s (Pomiar...)", currentDecelTime)
+	end
+
 	-- Update text.
 	self:Invoke("updateText", {
 		["top-speed"] = string.format("%.2f", self.speed * 3.6),
-		["top-accel"] = self.bestAccelTime > 0.0 and string.format("%.2f s", self.bestAccelTime) or "N/A",
-		["top-decel"] = self.bestDecelTime > 0.0 and string.format("%.2f s", self.bestDecelTime) or "N/A",
+		["top-accel"] = accelText,
+		["top-decel"] = decelText,
 	})
 end
 
