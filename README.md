@@ -22,7 +22,6 @@ You can save the handling by clicking "Copy Handling" near the top. You will nee
 In the top-middle of the screen, there are numbers to represent some "tops" for the vehicle. Falling or crashing will lead to irrelevant values. Reset the values within the editor by clicking "Reset Stats."
 * Top speed - The fastest speed, in kilometers per hour, that the vehicle has reached.
 * 0-100km/h Time - The best (lowest) time in seconds the vehicle took to accelerate from 0 to 100 km/h.
-* Braking Time - The best (lowest) time in seconds the vehicle took to come to a complete stop after pressing the brake.
 
 ![LiveHandling2](https://user-images.githubusercontent.com/8594390/113525004-6e12a400-9580-11eb-8ad2-a5fd70aef41d.png)
 
